@@ -1,6 +1,0 @@
-cradle:
-  stack:
-    - path: "./src"
-      component: "mu-graphql:lib"
-    - path: "./exe"
-      component: "mu-graphql:exe:library-graphql"

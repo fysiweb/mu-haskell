@@ -21,6 +21,7 @@ import qualified Data.Foldable               as F
 import qualified Data.HashMap.Strict         as HM
 import           Data.Int                    (Int32)
 import           Data.List                   (find)
+import qualified Data.List.NonEmpty          as NE
 import           Data.Maybe
 import           Data.Proxy
 import           Data.SOP.NS
@@ -408,12 +409,13 @@ unFragment frmap (GQL.FragmentSpreadSelection (GQL.FragmentSpread nm _ _) : ss)
          <*> unFragment frmap ss
   | otherwise  -- the fragment definition was not found
   = throwError $ "fragment '" <> nm <> "' was not found"
+unFragment frmap (GQL.InlineFragmentSelection (GQL.InlineFragment _ _ innerSs _) : ss)
+  = (++) <$> unFragment frmap (NE.toList innerSs)
+         <*> unFragment frmap ss
 unFragment frmap (GQL.FieldSelection (GQL.Field al nm args dir innerss loc) : ss)
   = (:) <$> (GQL.FieldSelection . flip (GQL.Field al nm args dir) loc
                 <$> unFragment frmap innerss)
         <*> unFragment frmap ss
-unFragment _ _
-  = throwError "inline fragments are not (yet) supported"
 
 class ParseMethod (p :: Package') (s :: Service') (ms :: [Method']) where
   selectMethod ::

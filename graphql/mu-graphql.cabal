@@ -18,13 +18,13 @@ library
   exposed-modules:
     Mu.GraphQL.Annotations
     Mu.GraphQL.Quasi
+    Mu.GraphQL.Query.Definition
+    Mu.GraphQL.Query.Parse
     Mu.GraphQL.Server
 
   other-modules:
     Mu.GraphQL.Quasi.LostParser
-    Mu.GraphQL.Query.Definition
     Mu.GraphQL.Query.Introspection
-    Mu.GraphQL.Query.Parse
     Mu.GraphQL.Query.Run
     Mu.GraphQL.Subscription.Protocol
 

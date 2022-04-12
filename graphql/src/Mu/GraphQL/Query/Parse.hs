@@ -15,8 +15,11 @@
 
 module Mu.GraphQL.Query.Parse where
 
+import           Control.Arrow               (first)
 import           Control.Monad.Except
 import qualified Data.Aeson                  as A
+import qualified Data.Aeson.Key              as K
+import qualified Data.Aeson.KeyMap           as KM
 import qualified Data.Foldable               as F
 import qualified Data.HashMap.Strict         as HM
 import           Data.Int                    (Int32)
@@ -48,7 +51,7 @@ instance A.FromJSON GQL.ConstValue where
                              Left  m -> pure $ GQL.ConstFloat m
   parseJSON (A.Array xs) = GQL.ConstList . map (`GQL.Node` GQL.Location 0 0) . F.toList
     <$> traverse A.parseJSON xs
-  parseJSON (A.Object o) = GQL.ConstObject . fmap toObjFld . HM.toList <$> traverse A.parseJSON o
+  parseJSON (A.Object o) = GQL.ConstObject . fmap toObjFld . map (first K.toText) . KM.toList <$> traverse A.parseJSON o
     where
       toObjFld :: (T.Text, GQL.ConstValue) -> GQL.ObjectField GQL.ConstValue
       toObjFld (k, v) = GQL.ObjectField k (GQL.Node v zl) zl
@@ -729,7 +732,7 @@ instance (ObjectOrEnumParser sch (sch :/: sty), KnownName sty)
 instance ValueParser sch ('TPrimitive A.Value) where
   valueParser vmap _ x = FPrimitive <$> toAesonValue vmap x
 instance ValueParser sch ('TPrimitive A.Object) where
-  valueParser vm _ (GQL.Object xs) = FPrimitive . HM.fromList <$> traverse (toKeyValuePairs vm) xs
+  valueParser vm _ (GQL.Object xs) = FPrimitive . KM.fromList . map (first (K.fromText)) <$> traverse (toKeyValuePairs vm) xs
   valueParser _ fname _            = throwError $ "field '" <> fname <> "' was not of right type"
 
 toKeyValuePairs :: MonadError T.Text m => VariableMap -> GQL.ObjectField GQL.Value -> m (T.Text, A.Value)
@@ -747,7 +750,7 @@ toAesonValue _  (GQL.Boolean b)  = pure $ A.Bool b
 toAesonValue _   GQL.Null        = pure A.Null
 toAesonValue _  (GQL.Enum e)     = pure $ A.String e
 toAesonValue vm (GQL.List xs)    = A.toJSON <$> traverse (toAesonValue vm . GQL.node) xs
-toAesonValue vm (GQL.Object xs)  = A.Object . HM.fromList <$> traverse (toKeyValuePairs vm) xs
+toAesonValue vm (GQL.Object xs)  = A.Object . KM.fromList . map (first K.fromText) <$> traverse (toKeyValuePairs vm) xs
 
 class ParseDifferentReturn (p :: Package') (r :: Return Symbol (TypeRef Symbol)) where
   parseDiffReturn :: MonadError T.Text f

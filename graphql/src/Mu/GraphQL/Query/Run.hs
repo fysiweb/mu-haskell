@@ -26,10 +26,12 @@ module Mu.GraphQL.Query.Run (
 , RunQueryFindHandler
 ) where
 
+import           Control.Arrow                  (first)
 import           Control.Concurrent.STM.TMQueue
 import           Control.Monad.Except           (MonadError, runExceptT)
 import           Control.Monad.Writer
 import qualified Data.Aeson                     as Aeson
+import qualified Data.Aeson.Key                 as K
 import qualified Data.Aeson.Types               as Aeson
 import           Data.Conduit
 import           Data.Conduit.Combinators       (sinkList, yieldMany)
@@ -339,7 +341,7 @@ instance ( KnownName sname, RunMethod m p whole chn ('Service sname ms) ms h )
          => RunQueryOnFoundHandler m p whole chn ('Service sname ms) h where
   type ServiceName ('Service sname ms) = sname
   runQueryOnFoundHandler f req sch whole path (ProperSvc this) inh (ServiceQuery queries)
-    = Aeson.object . catMaybes <$> mapM runOneQuery queries
+    = Aeson.object . map (first K.fromText) . catMaybes <$> mapM runOneQuery queries
     where
       -- if we include the signature we have to write
       -- an explicit type signature for 'runQueryFindHandler'
@@ -369,7 +371,7 @@ instance ( KnownName sname, RunMethod m p whole chn ('Service sname ms) ms h )
     = runMethodSubscription f req whole (Proxy @('Service sname ms)) path nm inh this args sink
   runSubscriptionOnFoundHandler _ _ _ _ _ _ (TypeNameQuery nm) sink
     = let realName = fromMaybe "__typename" nm
-          o = Aeson.object [(realName, Aeson.String $ T.pack $ nameVal (Proxy @sname))]
+          o = Aeson.object [(K.fromText realName, Aeson.String $ T.pack $ nameVal (Proxy @sname))]
       in runConduit $ yieldMany ([o] :: [Aeson.Value]) .| sink
   runSubscriptionOnFoundHandler _ _ _ _ _ _ _ sink
     = runConduit $ yieldMany
@@ -617,7 +619,7 @@ instance ( Aeson.ToJSON (Term sch ('DEnum name choices)) )
 instance ( KnownName rname, RunSchemaField sch fields )
          => RunSchemaQuery sch ('DRecord rname fields) where
   runSchemaQuery (TRecord args) (QueryRecord rs)
-    = Aeson.object $ mapMaybe runOneQuery rs
+    = Aeson.object $ map (first K.fromText) $ mapMaybe runOneQuery rs
     where
       runOneQuery (OneFieldQuery nm choice)
         = let (val, fname) = runSchemaField args choice
@@ -672,7 +674,7 @@ runIntroSchema
   -> WriterT [GraphQLError] IO Aeson.Value
 runIntroSchema path s@(Intro.Schema qr mut sub ts) ss
   = do things <- catMaybes <$> traverse runOne ss
-       pure $ Aeson.object things
+       pure $ Aeson.object $ map (first K.fromText) things
   where
     runOne (GQL.FieldSelection (GQL.Field alias nm _ _ innerss _))
       = let realName :: T.Text = fromMaybe nm alias
@@ -714,7 +716,7 @@ runIntroType path s@(Intro.Schema _ _ _ ts) (Intro.TypeRef t) ss
       Just ty -> runIntroType path s ty ss
 runIntroType path s (Intro.Type k tnm fs vals posTys ofT) ss
   = do things <- catMaybes <$> traverse runOne ss
-       pure $ Just $ Aeson.object things
+       pure $ Just $ Aeson.object $ map (first K.fromText) things
   where
     runOne (GQL.FieldSelection (GQL.Field alias nm _ _ innerss _))
       = let realName :: T.Text = fromMaybe nm alias
@@ -772,7 +774,7 @@ runIntroType path s (Intro.Type k tnm fs vals posTys ofT) ss
       -> WriterT [GraphQLError] IO (Maybe Aeson.Value)
     runIntroFields fpath fld fss
       = do things <- catMaybes <$> traverse (runIntroField fpath fld) fss
-           pure $ Just $ Aeson.object things
+           pure $ Just $ Aeson.object $ map (first K.fromText) things
 
     runIntroField fpath (Intro.Field fnm fargs fty)
                   (GQL.FieldSelection (GQL.Field alias nm _ _ innerss _))
@@ -813,7 +815,7 @@ runIntroType path s (Intro.Type k tnm fs vals posTys ofT) ss
       -> WriterT [GraphQLError] IO (Maybe Aeson.Value)
     runIntroEnums epath enm ess
       = do things <- catMaybes <$> traverse (runIntroEnum epath enm) ess
-           pure $ Just $ Aeson.object things
+           pure $ Just $ Aeson.object $ map (first K.fromText) things
 
     runIntroEnum epath (Intro.EnumValue enm)
                  (GQL.FieldSelection (GQL.Field alias nm _ _ innerss _))
@@ -841,7 +843,7 @@ runIntroType path s (Intro.Type k tnm fs vals posTys ofT) ss
       -> WriterT [GraphQLError] IO (Maybe Aeson.Value)
     runIntroInputs ipath inm iss
       = do things <- catMaybes <$> traverse (runIntroInput ipath inm) iss
-           pure $ Just $ Aeson.object things
+           pure $ Just $ Aeson.object $ map (first K.fromText) things
 
     runIntroInput ipath (Intro.Input inm def ty)
                  (GQL.FieldSelection (GQL.Field alias nm _ _ innerss _))

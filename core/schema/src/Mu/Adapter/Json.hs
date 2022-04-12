@@ -22,7 +22,8 @@ import           Control.Applicative                 ((<|>))
 import           Data.Aeson
 import           Data.Aeson.Types
 import           Data.Functor.Contravariant
-import qualified Data.HashMap.Strict                 as HM
+import qualified Data.Aeson.KeyMap                   as KM
+import qualified Data.Aeson.Key                      as K
 import qualified Data.Text                           as T
 import qualified Data.Vector                         as V
 
@@ -31,8 +32,8 @@ import qualified Mu.Schema.Interpretation.Schemaless as SLess
 
 instance SLess.ToSchemalessTerm Value where
   toSchemalessTerm (Object o)
-    = SLess.TRecord $ map (\(k,v) -> SLess.Field k (SLess.toSchemalessValue v))
-                    $ HM.toList o
+    = SLess.TRecord $ map (\(k,v) -> SLess.Field (K.toText k) (SLess.toSchemalessValue v))
+                    $ KM.toList o
   toSchemalessTerm v = SLess.TSimple (SLess.toSchemalessValue v)
 
 instance SLess.ToSchemalessValue Value where
@@ -61,10 +62,10 @@ instance FromJSONFields sch args => FromJSON (Term sch ('DRecord name args)) whe
 class ToJSONFields sch fields where
   toJSONFields :: NP (Field sch) fields -> Object
 instance ToJSONFields sch '[] where
-  toJSONFields _ = HM.empty
+  toJSONFields _ = KM.empty
 instance (KnownName name, ToJSON (FieldValue sch t), ToJSONFields sch fs)
          => ToJSONFields sch ('FieldDef name t ': fs) where
-  toJSONFields (Field v :* rest) = HM.insert key value $ toJSONFields rest
+  toJSONFields (Field v :* rest) = KM.insert (K.fromText key) value $ toJSONFields rest
     where key = T.pack (nameVal (Proxy @name))
           value = toJSON v
 
@@ -74,7 +75,7 @@ instance FromJSONFields sch '[] where
   parseJSONFields _ = pure Nil
 instance (KnownName name, FromJSON (FieldValue sch t), FromJSONFields sch fs)
          => FromJSONFields sch ('FieldDef name t ': fs) where
-  parseJSONFields v = (:*) <$> (Field <$> v .: key) <*> parseJSONFields v
+  parseJSONFields v = (:*) <$> (Field <$> v .: K.fromText key) <*> parseJSONFields v
     where key = T.pack (nameVal (Proxy @name))
 
 instance ToJSONEnum choices => ToJSON (Term sch ('DEnum name choices)) where
